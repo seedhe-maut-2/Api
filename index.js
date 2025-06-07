@@ -604,7 +604,7 @@ export default {
           totalRequests: results.length,
           successCount: results.filter(r => r.success).length,
           failureCount: results.filter(r => !r.success).length,
-          averageTime: `${(results.reduce((sum, r) => sum + (r.time ? parseInt(r.time) : 0), 0) / results.length || 0}ms`
+          averageTime: `${(results.reduce((sum, r) => sum + (r.time ? parseInt(r.time) : 0), 0) / results.length || 0)}ms`
         },
         completedAt: new Date().toLocaleTimeString()
       }, null, 2), {
